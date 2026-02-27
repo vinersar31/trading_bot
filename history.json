@@ -1,0 +1,17 @@
+[
+    {
+        "date": "2026-02-27",
+        "cash": 0.0,
+        "holdings": {
+            "NVDA": 0.2764722052117643,
+            "AAPL": 0.18461766598603174
+        },
+        "value": 100.0,
+        "decisions": {
+            "BTC-USD": "SELL",
+            "ETH-USD": "SELL",
+            "NVDA": "BUY",
+            "AAPL": "BUY"
+        }
+    }
+]
