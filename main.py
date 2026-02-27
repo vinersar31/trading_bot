@@ -72,7 +72,7 @@ def main():
 
     # 5. Generate Report
     print("Generating report...")
-    generate_report(df_res, trades, history=history)
+    generate_report(df_res, trades, data_dict, history=history)
 
     # Print Summary
     initial_value = 100

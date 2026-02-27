@@ -3,6 +3,17 @@ import pandas as pd
 from src.reporting import generate_report
 
 class TestReporting(unittest.TestCase):
+    def setUp(self):
+        # Create dummy data_dict
+        dates = pd.date_range(start='2020-01-01', periods=10, freq='D')
+        self.dummy_data_dict = {
+            'BTC': pd.DataFrame({
+                'Close': [100 + i for i in range(10)],
+                'SMA50': [90 + i for i in range(10)],
+                'SMA200': [80 + i for i in range(10)]
+            }, index=dates)
+        }
+
     def test_generate_report_no_history(self):
         # Setup Data
         dates = pd.date_range(start='2020-01-01', periods=10, freq='D')
@@ -12,7 +23,7 @@ class TestReporting(unittest.TestCase):
         trades = []
 
         # Should not raise exception
-        generate_report(df, trades)
+        generate_report(df, trades, self.dummy_data_dict)
 
     def test_generate_report_with_history(self):
         # Setup Data
@@ -28,7 +39,7 @@ class TestReporting(unittest.TestCase):
 
         # Should not raise exception, particularly the subplot error
         try:
-            generate_report(df, trades, history=history)
+            generate_report(df, trades, self.dummy_data_dict, history=history)
         except ValueError as e:
             self.fail(f"generate_report raised ValueError unexpectedly: {e}")
 
