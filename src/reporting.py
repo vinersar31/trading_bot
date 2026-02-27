@@ -29,17 +29,23 @@ def generate_report(df_sim, trades, history=None):
     row_heights = [0.6, 0.4]
     subplot_titles = ('Backtest Portfolio Value', 'Paper Trading History & Allocation')
 
+    # Define subplot specs
+    specs = [[{"type": "xy"}], [{"type": "xy"}]]
+
     if history:
         rows = 3
         row_heights = [0.5, 0.3, 0.2]
         subplot_titles = ('Backtest Portfolio Value', 'Paper Trading History', 'Current Allocation')
+        # Add specs for 3rd row (Pie chart requires 'domain' type)
+        specs = [[{"type": "xy"}], [{"type": "xy"}], [{"type": "domain"}]]
 
     # Create Figure
     fig = make_subplots(rows=rows, cols=1,
                         shared_xaxes=False,
                         vertical_spacing=0.1,
                         subplot_titles=subplot_titles,
-                        row_heights=row_heights)
+                        row_heights=row_heights,
+                        specs=specs)
 
     # 1. Backtest Portfolio Value
     fig.add_trace(go.Scatter(x=df_sim.index, y=df_sim['PortfolioValue'], name='Backtest Value',
@@ -77,9 +83,6 @@ def generate_report(df_sim, trades, history=None):
 
             # Let's try to use the 'value' from record as total and cash as cash.
             invested_value = latest_record.get('value', 0.0) - cash
-
-            # If we want detailed breakdown, we'd need prices.
-            # For now, let's show Cash vs Invested or just Holdings Distribution by Quantity (not ideal but something)
 
             # If we can't easily get value per asset, let's just plot Cash vs Invested
             pie_values = [cash, invested_value]
