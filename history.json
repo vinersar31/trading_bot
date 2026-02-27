@@ -1,10 +1,17 @@
 [
     {
         "date": "2026-02-27",
-        "price": 65765.1015625,
-        "signal": 0,
-        "cash": 100.0,
-        "position": 0.0,
-        "value": 100.0
+        "cash": 0.0,
+        "holdings": {
+            "NVDA": 0.27043106801372724,
+            "AAPL": 0.1831837250920335
+        },
+        "value": 100.00000000000001,
+        "decisions": {
+            "BTC-USD": "SELL",
+            "ETH-USD": "SELL",
+            "NVDA": "BUY",
+            "AAPL": "BUY"
+        }
     }
 ]

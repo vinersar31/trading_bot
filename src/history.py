@@ -42,14 +42,15 @@ def init_firebase():
         print("FIREBASE_SERVICE_ACCOUNT_KEY not found. Using local storage (history.json).")
         db = None
 
-def update_paper_portfolio(date, price, signal):
+def update_paper_portfolio(date, current_prices, technical_signals, sentiment_scores):
     """
-    Updates the paper trading history.
+    Updates the paper trading history using a weighted decision algorithm.
 
     Args:
         date (pd.Timestamp): Current simulation date.
-        price (float): Current price of BTC.
-        signal (int): 1 (Buy), -1 (Sell), 0 (Hold).
+        current_prices (dict): {'BTC-USD': 50000, ...}
+        technical_signals (dict): {'BTC-USD': 1 (Bull), -1 (Bear), 0 (Neutral)}
+        sentiment_scores (dict): {'BTC-USD': 0.5, ...}
 
     Returns:
         list: The complete history of portfolio values.
@@ -63,14 +64,12 @@ def update_paper_portfolio(date, price, signal):
     history = []
     if db:
         try:
-            # Retrieve all documents from 'history' collection, ordered by date
             docs = db.collection('history').order_by('date').stream()
             history = [doc.to_dict() for doc in docs]
         except Exception as e:
             print(f"Error reading from Firebase: {e}")
             history = []
     else:
-        # Load from local file
         if os.path.exists('history.json'):
             try:
                 with open('history.json', 'r') as f:
@@ -78,69 +77,112 @@ def update_paper_portfolio(date, price, signal):
             except Exception:
                 history = []
 
-    # 2. Determine Current State
+    # 2. Determine Current State from History
     if not history:
         # Initial State
         current_cash = 100.0
-        current_position = 0.0
+        # Holdings: dictionary of symbol -> quantity
+        current_holdings = {}
     else:
         last_record = history[-1]
-        current_cash = last_record.get('cash', 100.0)
-        current_position = last_record.get('position', 0.0)
+        current_cash = float(last_record.get('cash', 100.0))
+        # Handle migration from old single-asset format
+        if 'position' in last_record and 'holdings' not in last_record:
+            # Old format had 'position' for BTC-USD
+            # Assuming BTC-USD was the only asset
+            # But let's check if we know the symbol. Defaulting to BTC-USD for migration.
+            current_holdings = {'BTC-USD': float(last_record.get('position', 0.0))}
+        else:
+            current_holdings = last_record.get('holdings', {})
+            # Ensure quantities are floats
+            current_holdings = {k: float(v) for k, v in current_holdings.items()}
 
-    # 3. Execute Trade Logic (Paper Trading)
-    # Note: This logic mirrors the backtest but runs step-by-step daily
+    # 3. Weighted Decision Algorithm
+    # Weights
+    W_TECH = 0.7
+    W_SENT = 0.3
+
+    # Thresholds for Action
+    BUY_THRESHOLD = 0.5  # If Score > 0.5
+    SELL_THRESHOLD = -0.5 # If Score < -0.5
+
+    decisions = {} # symbol -> 'BUY', 'SELL', 'HOLD'
+
+    for symbol in current_prices.keys():
+        tech_sig = technical_signals.get(symbol, 0)
+        sent_score = sentiment_scores.get(symbol, 0.0)
+
+        # Calculate Weighted Score
+        # Tech signal is -1, 0, 1
+        # Sentiment is -1.0 to 1.0
+
+        final_score = (tech_sig * W_TECH) + (sent_score * W_SENT)
+
+        if final_score > BUY_THRESHOLD:
+            decisions[symbol] = 'BUY'
+        elif final_score < SELL_THRESHOLD:
+            decisions[symbol] = 'SELL'
+        else:
+            decisions[symbol] = 'HOLD'
+
+    # 4. Execute Trades
+    # Priority: Sell first to raise cash, then Buy
 
     new_cash = current_cash
-    new_position = current_position
+    new_holdings = current_holdings.copy()
 
-    # Buy Signal
-    if signal == 1 and current_cash > 0:
-        amount = current_cash / price
-        new_position = amount
-        new_cash = 0.0
-        print(f"Paper Trade: BUY at {price}")
+    # Execute Sells
+    for symbol, action in decisions.items():
+        if action == 'SELL':
+            qty = new_holdings.get(symbol, 0.0)
+            if qty > 0:
+                price = current_prices.get(symbol, 0.0)
+                proceeds = qty * price
+                new_cash += proceeds
+                new_holdings[symbol] = 0.0
+                print(f"Paper Trade: SELL {symbol} at {price:.2f} (Score)")
 
-    # Sell Signal
-    elif signal == -1 and current_position > 0:
-        amount = current_position
-        new_cash = amount * price
-        new_position = 0.0
-        print(f"Paper Trade: SELL at {price}")
+    # Execute Buys
+    # Distribute available cash among BUY signals?
+    buy_candidates = [s for s, a in decisions.items() if a == 'BUY']
 
-    # Calculate Current Portfolio Value
-    portfolio_value = new_cash + (new_position * price)
+    if buy_candidates and new_cash > 1.0: # Min cash
+        amount_per_trade = new_cash / len(buy_candidates)
+
+        for symbol in buy_candidates:
+            price = current_prices.get(symbol, 0.0)
+            if price > 0:
+                qty = amount_per_trade / price
+                new_holdings[symbol] = new_holdings.get(symbol, 0.0) + qty
+                new_cash -= amount_per_trade
+                print(f"Paper Trade: BUY {symbol} at {price:.2f} (Amount: {amount_per_trade:.2f})")
+
+    # 5. Calculate Total Value
+    total_value = new_cash
+    for sym, qty in new_holdings.items():
+        price = current_prices.get(sym, 0.0)
+        total_value += qty * price
 
     new_record = {
         'date': date_str,
-        'price': float(price),
-        'signal': int(signal),
         'cash': float(new_cash),
-        'position': float(new_position),
-        'value': float(portfolio_value)
+        'holdings': new_holdings,
+        'value': float(total_value),
+        # Optional: store signals/scores for debugging
+        'decisions': decisions
     }
 
-    # 4. Save New Record
-    # Check if record for today already exists to avoid duplicates (idempotency)
-    # We use date_str as the document ID in Firebase for easy lookups
-
+    # 6. Save Record
     if db:
         try:
             db.collection('history').document(date_str).set(new_record)
-            # Re-fetch history to ensure we return the updated list including the new record
-            # Optimized: Just append to local list since we know what we saved
-            # But we need to handle the case where we overwrote an existing daily record
-
-            # Simple approach: Check if last record date is same
             if history and history[-1]['date'] == date_str:
                 history[-1] = new_record
             else:
                 history.append(new_record)
-
         except Exception as e:
             print(f"Error saving to Firebase: {e}")
     else:
-        # Local Storage
         if history and history[-1]['date'] == date_str:
             history[-1] = new_record
         else:
