@@ -38,8 +38,11 @@ def test_backtest_logic():
     df['SMA50'] = [50, 50, 50, 60, 70, 70, 70, 60, 50, 40]
     df['SMA200'] = [60, 60, 60, 50, 40, 40, 40, 50, 60, 70]
 
+    # New Run Simulation expects a Dict of DataFrames
+    data_dict = {'BTC': df}
+
     # Run Simulation
-    df_res, trades = run_simulation(df, initial_capital=100)
+    df_res, trades = run_simulation(data_dict, initial_capital=100)
 
     assert len(trades) == 2
 
@@ -47,6 +50,7 @@ def test_backtest_logic():
     buy_trade = trades[0]
     assert buy_trade['type'] == 'BUY'
     assert buy_trade['price'] == 130
+    assert buy_trade['symbol'] == 'BTC'
     # Use to_datetime to ensure correct comparison
     assert pd.to_datetime(buy_trade['date']) == pd.to_datetime('2020-01-04')
 

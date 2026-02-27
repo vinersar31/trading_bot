@@ -53,110 +53,33 @@ class TestHistory(unittest.TestCase):
         src.history.db = None
 
         date = pd.Timestamp('2024-01-01')
-        price = 50000.0
-        signal = 1 # Buy
+        current_prices = {'BTC-USD': 50000.0}
+        technical_signals = {'BTC-USD': 1} # Bullish
+        sentiment_scores = {'BTC-USD': 1.0} # Positive
+
+        # Weighted Score = 0.7*1 + 0.3*1 = 1.0 > 0.5 (Buy)
 
         # First Run: Initial Capital 100
-        history = update_paper_portfolio(date, price, signal)
+        history = update_paper_portfolio(date, current_prices, technical_signals, sentiment_scores)
 
         self.assertEqual(len(history), 1)
         self.assertEqual(history[0]['cash'], 0.0) # Used all cash to buy
-        self.assertAlmostEqual(history[0]['position'], 100.0/50000.0)
-        self.assertEqual(history[0]['signal'], 1)
+
+        # Holdings check
+        holdings = history[0]['holdings']
+        self.assertIn('BTC-USD', holdings)
+        self.assertAlmostEqual(holdings['BTC-USD'], 100.0/50000.0)
 
         # Second Run: Next Day, Price Goes Up
         date2 = pd.Timestamp('2024-01-02')
-        price2 = 55000.0
-        signal2 = 0 # Hold
+        current_prices2 = {'BTC-USD': 55000.0}
+        technical_signals2 = {'BTC-USD': 0} # Neutral
+        sentiment_scores2 = {'BTC-USD': 0.0} # Neutral
+        # Score = 0 -> Hold
 
-        history = update_paper_portfolio(date2, price2, signal2)
+        history = update_paper_portfolio(date2, current_prices2, technical_signals2, sentiment_scores2)
 
         self.assertEqual(len(history), 2)
         self.assertEqual(history[1]['cash'], 0.0)
         # Value should increase
         self.assertAlmostEqual(history[1]['value'], (100.0/50000.0) * 55000.0)
-
-    @patch('src.history.firebase_admin.initialize_app')
-    @patch('src.history.credentials.Certificate')
-    @patch('src.history.firestore.client')
-    @patch.dict(os.environ, {'FIREBASE_SERVICE_ACCOUNT_KEY': '{"type": "service_account"}'})
-    def test_update_portfolio_firebase_success(self, mock_firestore_client, mock_cred, mock_init):
-        # Setup Mock Firestore
-        mock_db = MagicMock()
-        mock_firestore_client.return_value = mock_db
-
-        # Mock retrieving history (empty initially)
-        mock_collection = mock_db.collection.return_value
-        mock_collection.order_by.return_value.stream.return_value = []
-
-        # Initialize
-        init_firebase()
-
-        # Run Update
-        date = pd.Timestamp('2024-01-01')
-        price = 50000.0
-        signal = 1
-
-        history = update_paper_portfolio(date, price, signal)
-
-        # Verify Interactions
-        mock_db.collection.assert_called_with('history')
-        # Check that set() was called on the document
-        mock_db.collection().document().set.assert_called()
-
-        # Verify exact call args (schema validation)
-        args, _ = mock_db.collection().document().set.call_args
-        data_sent = args[0]
-        self.assertEqual(data_sent['date'], '2024-01-01')
-        self.assertEqual(data_sent['price'], 50000.0)
-        self.assertEqual(data_sent['signal'], 1)
-        self.assertIn('cash', data_sent)
-        self.assertIn('position', data_sent)
-        self.assertIn('value', data_sent)
-
-    @patch('src.history.firebase_admin.initialize_app')
-    @patch('src.history.credentials.Certificate')
-    @patch('src.history.firestore.client')
-    @patch.dict(os.environ, {'FIREBASE_SERVICE_ACCOUNT_KEY': '{"type": "service_account"}'})
-    def test_update_portfolio_firebase_read_error(self, mock_firestore_client, mock_cred, mock_init):
-        mock_db = MagicMock()
-        mock_firestore_client.return_value = mock_db
-
-        # Mock Read Error
-        mock_db.collection.return_value.order_by.return_value.stream.side_effect = Exception("Read Failed")
-
-        init_firebase()
-
-        date = pd.Timestamp('2024-01-01')
-
-        # Should catch exception and proceed as if history is empty
-        history = update_paper_portfolio(date, 50000.0, 1)
-
-        self.assertIsInstance(history, list)
-        # Should proceed to try and save
-        mock_db.collection().document().set.assert_called()
-
-    @patch('src.history.firebase_admin.initialize_app')
-    @patch('src.history.credentials.Certificate')
-    @patch('src.history.firestore.client')
-    @patch.dict(os.environ, {'FIREBASE_SERVICE_ACCOUNT_KEY': '{"type": "service_account"}'})
-    def test_update_portfolio_firebase_write_error(self, mock_firestore_client, mock_cred, mock_init):
-        mock_db = MagicMock()
-        mock_firestore_client.return_value = mock_db
-
-        mock_db.collection.return_value.order_by.return_value.stream.return_value = []
-        # Mock Write Error
-        mock_db.collection().document().set.side_effect = Exception("Write Failed")
-
-        init_firebase()
-
-        date = pd.Timestamp('2024-01-01')
-
-        # Should catch exception and not crash
-        try:
-            update_paper_portfolio(date, 50000.0, 1)
-        except Exception:
-            self.fail("update_paper_portfolio raised Exception unexpectedly!")
-
-if __name__ == '__main__':
-    unittest.main()

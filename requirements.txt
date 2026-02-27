@@ -4,3 +4,5 @@ yfinance
 plotly
 pytest
 firebase-admin
+feedparser
+textblob
