@@ -26,7 +26,7 @@ jobs:
 
     - name: Run Simulation and Update History
       env:
-        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        FIREBASE_SERVICE_ACCOUNT_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
       run: |
         python main.py
 

@@ -10,7 +10,7 @@ db = None
 def init_firebase():
     """
     Initializes Firebase.
-    Checks for FIREBASE_SERVICE_ACCOUNT environment variable.
+    Checks for FIREBASE_SERVICE_ACCOUNT_KEY environment variable.
     If present, initializes the app.
     If not, defaults to local file storage.
     """
@@ -25,7 +25,7 @@ def init_firebase():
                  pass # Fallback if app exists but client fails
         return
 
-    service_account_key = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
+    service_account_key = os.environ.get('FIREBASE_SERVICE_ACCOUNT_KEY')
 
     if service_account_key:
         try:
@@ -39,7 +39,7 @@ def init_firebase():
             print(f"Error initializing Firebase: {e}. Falling back to local storage.")
             db = None
     else:
-        print("FIREBASE_SERVICE_ACCOUNT not found. Using local storage (history.json).")
+        print("FIREBASE_SERVICE_ACCOUNT_KEY not found. Using local storage (history.json).")
         db = None
 
 def update_paper_portfolio(date, price, signal):
