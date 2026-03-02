@@ -2,8 +2,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
-import json
-import os
 
 def generate_report(df_sim, trades, data_dict, history=None):
     # Calculate Statistics
@@ -193,26 +191,5 @@ def generate_report(df_sim, trades, data_dict, history=None):
 
     fig.update_xaxes(rangeslider_visible=False)
 
-
-    # Create output directory if it doesn't exist
-    out_dir = "frontend/public"
-    os.makedirs(out_dir, exist_ok=True)
-
-    # Write the chart JSON
-    fig.write_json(os.path.join(out_dir, "chart.json"))
-
-    # Write the stats JSON
-    stats = {
-        "initialValue": float(initial_value),
-        "finalValue": float(final_value),
-        "totalReturn": float(total_return),
-        "maxDrawdown": float(max_drawdown),
-        "numTrades": int(num_trades),
-        "winRate": float(win_rate),
-        "winTrades": int(win_trades),
-        "totalCompletedTrades": int(total_completed_trades)
-    }
-    with open(os.path.join(out_dir, "stats.json"), "w") as f:
-        json.dump(stats, f)
-
-    print(f"Report JSONs generated in {out_dir}")
+    fig.write_html("index.html")
+    print("Report generated: index.html")

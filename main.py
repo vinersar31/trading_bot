@@ -83,7 +83,7 @@ def main():
     print(f"Final Backtest Value: ")
     print(f"Total Return (Backtest): {total_return:.2f}%")
     print(f"Total Trades: {len(trades)}")
-    print("Report saved to frontend/public")
+    print("Report saved to index.html")
 
 if __name__ == "__main__":
     main()
