@@ -27,26 +27,33 @@ jobs:
 
     - name: Run tests
       run: |
-        python -m pytest tests/
+        PYTHONPATH=. python -m pytest tests/
 
     - name: Run Simulation
       run: |
         python main.py
 
-    - name: Prepare for Deploy
-      if: github.ref == 'refs/heads/main'
-      run: |
-        # Force add index.html even though it's in .gitignore
-        sed -i '/index.html/d' .gitignore
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Frontend Dependencies
+      working-directory: ./frontend
+      run: npm install
+
+    - name: Build Next.js Dashboard
+      working-directory: ./frontend
+      run: npm run build
 
     - name: Deploy to GitHub Pages
       if: github.ref == 'refs/heads/main'
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
+        publish_dir: ./frontend/out
         publish_branch: gh-pages
         keep_files: true
         user_name: 'github-actions[bot]'
         user_email: 'github-actions[bot]@users.noreply.github.com'
-        commit_message: 'Deploy report to gh-pages'
+        commit_message: 'Deploy Next.js report to gh-pages'
