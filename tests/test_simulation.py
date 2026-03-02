@@ -13,6 +13,12 @@ def test_calculate_indicators():
 
     assert 'SMA50' in df_ind.columns
     assert 'SMA200' in df_ind.columns
+    assert 'RSI' in df_ind.columns
+    assert 'MACD' in df_ind.columns
+    assert 'MACD_Signal' in df_ind.columns
+    assert 'StochRSI' in df_ind.columns
+    assert 'StochRSI_K' in df_ind.columns
+    assert 'StochRSI_D' in df_ind.columns
 
     # Check first 49 values are NaN for SMA50
     assert pd.isna(df_ind['SMA50'].iloc[48])
@@ -29,14 +35,19 @@ def test_backtest_logic():
         'Close': [100, 110, 120, 130, 140, 130, 120, 110, 100, 90],
     }, index=dates)
 
-    # Add dummy SMAs
-    # Day 0: 50, 60
+    # Add dummy indicators
+    # Day 0: SMA50=50, SMA200=60
     # ...
-    # Day 3: 60, 50 (Golden Cross) -> Buy at 130
+    # Day 3: SMA50=60, SMA200=50 (Golden Cross) -> Buy at 130
     # ...
-    # Day 8: 50, 60 (Death Cross) -> Sell at 100
+    # Day 8: SMA50=50, SMA200=60 (Death Cross) -> Sell at 100
     df['SMA50'] = [50, 50, 50, 60, 70, 70, 70, 60, 50, 40]
     df['SMA200'] = [60, 60, 60, 50, 40, 40, 40, 50, 60, 70]
+    df['MACD'] = [0] * 10
+    df['MACD_Signal'] = [0] * 10
+    df['RSI'] = [50] * 10
+    df['StochRSI_K'] = [0.5] * 10
+    df['StochRSI_D'] = [0.5] * 10
 
     # New Run Simulation expects a Dict of DataFrames
     data_dict = {'BTC': df}

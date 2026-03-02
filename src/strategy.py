@@ -56,37 +56,86 @@ def fetch_data(symbols, period='2y'):
     return data_dict
 
 def calculate_indicators(df):
-    """Calculates SMA50 and SMA200 indicators for a DataFrame."""
+    """Calculates SMA50, SMA200, RSI, MACD, and StochRSI indicators for a DataFrame."""
     if df.empty:
         return df
 
     # Ensure we are working with a copy to avoid SettingWithCopyWarning
     df = df.copy()
 
-    # Calculate Simple Moving Averages
-    # Check if 'Close' is present
     if 'Close' in df.columns:
-        df['SMA50'] = df['Close'].rolling(window=50).mean()
-        df['SMA200'] = df['Close'].rolling(window=200).mean()
+        close = df['Close']
+
+        # Simple Moving Averages
+        df['SMA50'] = close.rolling(window=50).mean()
+        df['SMA200'] = close.rolling(window=200).mean()
+
+        # Relative Strength Index (RSI) - 14 period
+        delta = close.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['RSI'] = 100 - (100 / (1 + rs))
+
+        # MACD - 12, 26, 9
+        exp1 = close.ewm(span=12, adjust=False).mean()
+        exp2 = close.ewm(span=26, adjust=False).mean()
+        df['MACD'] = exp1 - exp2
+        df['MACD_Signal'] = df['MACD'].ewm(span=9, adjust=False).mean()
+
+        # Stochastic RSI - 14 period, 3 period K, 3 period D
+        rsi_min = df['RSI'].rolling(window=14).min()
+        rsi_max = df['RSI'].rolling(window=14).max()
+        df['StochRSI'] = (df['RSI'] - rsi_min) / (rsi_max - rsi_min)
+        df['StochRSI_K'] = df['StochRSI'].rolling(window=3).mean()
+        df['StochRSI_D'] = df['StochRSI_K'].rolling(window=3).mean()
 
     return df
 
 def get_technical_signal(row):
     """
-    Determines the technical signal based on SMAs from a single row (Series).
+    Determines the technical signal based on multiple indicators from a single row (Series).
+    Uses a composite score from SMA, MACD, RSI, and StochRSI.
 
     Args:
-        row (pd.Series): A row from the DataFrame containing SMA50 and SMA200.
+        row (pd.Series): A row from the DataFrame containing technical indicators.
 
     Returns:
         int: 1 (Bullish State), -1 (Bearish State), 0 (Neutral/Indeterminate)
     """
-    if pd.isna(row.get('SMA50')) or pd.isna(row.get('SMA200')):
-        return 0
+    score = 0
 
-    if row['SMA50'] > row['SMA200']:
+    # 1. SMA
+    if not pd.isna(row.get('SMA50')) and not pd.isna(row.get('SMA200')):
+        if row['SMA50'] > row['SMA200']:
+            score += 1
+        elif row['SMA50'] < row['SMA200']:
+            score -= 1
+
+    # 2. MACD
+    if not pd.isna(row.get('MACD')) and not pd.isna(row.get('MACD_Signal')):
+        if row['MACD'] > row['MACD_Signal']:
+            score += 1
+        elif row['MACD'] < row['MACD_Signal']:
+            score -= 1
+
+    # 3. RSI
+    if not pd.isna(row.get('RSI')):
+        if row['RSI'] < 30: # Oversold - Bullish potential
+            score += 1
+        elif row['RSI'] > 70: # Overbought - Bearish potential
+            score -= 1
+
+    # 4. StochRSI
+    if not pd.isna(row.get('StochRSI_K')) and not pd.isna(row.get('StochRSI_D')):
+        if row['StochRSI_K'] > row['StochRSI_D']:
+            score += 1
+        elif row['StochRSI_K'] < row['StochRSI_D']:
+            score -= 1
+
+    if score > 0:
         return 1
-    elif row['SMA50'] < row['SMA200']:
+    elif score < 0:
         return -1
     else:
         return 0
