@@ -15,7 +15,7 @@ def main():
     init_firebase()
 
     # Define Portfolio Assets (Stock + Crypto mix)
-    SYMBOLS = ['BTC-USD', 'ETH-USD', 'NVDA', 'AAPL']
+    SYMBOLS = ['BTC-USD', 'ETH-USD', 'NVDA', 'AAPL', 'GOOGL']
     print(f"Assets: {SYMBOLS}")
 
     # 1. Fetch Data
