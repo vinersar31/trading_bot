@@ -61,7 +61,7 @@ def get_sentiment(symbol):
 
 if __name__ == "__main__":
     # Test block
-    symbols = ["BTC-USD", "NVDA", "AAPL"]
+    symbols = ["BTC-USD", "NVDA", "AAPL", "GOOGL"]
     for sym in symbols:
         score = get_sentiment(sym)
         print(f"Sentiment for {sym}: {score:.4f}")
