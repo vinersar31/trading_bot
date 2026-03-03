@@ -47,7 +47,7 @@ def run_simulation(data_dict, initial_capital=100.0):
 
     # Iterate
     prev_prices = {}
-    prev_smas = {} # {symbol: (sma50, sma200)}
+    prev_indicators = {} # {symbol: (sma50, sma200, macd, macd_signal, rsi, stoch_k, stoch_d)}
 
     for i, current_date in enumerate(all_dates):
         current_portfolio_value = cash
@@ -55,13 +55,10 @@ def run_simulation(data_dict, initial_capital=100.0):
         # 1. Update Portfolio Value based on current holdings and prices
         for symbol, df in aligned_data.items():
             try:
-                # Use .loc for safety with datetime index
-                # .iloc[i] is faster if we are sure of alignment, which we are
                 curr_row = df.iloc[i]
                 price = curr_row['Close']
 
                 if pd.isna(price):
-                    # Should be handled by ffill, but check
                     continue
 
                 holding_qty = holdings[symbol]
@@ -73,16 +70,6 @@ def run_simulation(data_dict, initial_capital=100.0):
         sim_df.iloc[i, sim_df.columns.get_loc('PortfolioValue')] = current_portfolio_value
 
         # 2. Check Signals and Trade
-        # Strategy:
-        # - Allocate equal capital to each asset if cash is available?
-        # - Or just buy/sell independently based on available cash pool?
-        # Simple Logic:
-        # - If Buy Signal and Cash > 0: Buy with 100% of available cash / num_assets_with_signal?
-        # - Let's simplify: Buy with 100% cash if only 1 signal. If multiple, split.
-        # - Or simpler: Fixed allocation per trade?
-        # - Let's use: Buy with all available cash for the first signal found (greedy).
-        #   (Better: split cash among active buy signals this turn).
-
         buy_signals = []
         sell_signals = []
 
@@ -91,38 +78,71 @@ def run_simulation(data_dict, initial_capital=100.0):
         for symbol, df in aligned_data.items():
             curr_row = df.iloc[i]
 
-            # Skip if data missing
-            if pd.isna(curr_row['Close']) or pd.isna(curr_row['SMA50']) or pd.isna(curr_row['SMA200']):
+            # Skip if essential data missing
+            if pd.isna(curr_row['Close']):
                 continue
 
             price = curr_row['Close']
             current_prices_map[symbol] = price
 
-            # Check Cross
             # We need previous day's data for this symbol
-            # We can use the 'prev_smas' dict we maintain
-
-            prev_sma = prev_smas.get(symbol)
-            if prev_sma is None:
+            prev_ind = prev_indicators.get(symbol)
+            if prev_ind is None:
                 # Initialize
-                prev_smas[symbol] = (curr_row['SMA50'], curr_row['SMA200'])
+                prev_indicators[symbol] = (
+                    curr_row.get('SMA50'), curr_row.get('SMA200'),
+                    curr_row.get('MACD'), curr_row.get('MACD_Signal'),
+                    curr_row.get('RSI'), curr_row.get('StochRSI_K'), curr_row.get('StochRSI_D')
+                )
                 continue
 
-            prev_sma50, prev_sma200 = prev_sma
-            curr_sma50, curr_sma200 = curr_row['SMA50'], curr_row['SMA200']
+            # Unpack previous
+            p_sma50, p_sma200, p_macd, p_macd_sig, p_rsi, p_stoch_k, p_stoch_d = prev_ind
+
+            # Get current
+            c_sma50, c_sma200 = curr_row.get('SMA50'), curr_row.get('SMA200')
+            c_macd, c_macd_sig = curr_row.get('MACD'), curr_row.get('MACD_Signal')
+            c_rsi = curr_row.get('RSI')
+            c_stoch_k, c_stoch_d = curr_row.get('StochRSI_K'), curr_row.get('StochRSI_D')
 
             # Update for next loop
-            prev_smas[symbol] = (curr_sma50, curr_sma200)
+            prev_indicators[symbol] = (c_sma50, c_sma200, c_macd, c_macd_sig, c_rsi, c_stoch_k, c_stoch_d)
 
-            if pd.isna(prev_sma50) or pd.isna(prev_sma200) or pd.isna(curr_sma50) or pd.isna(curr_sma200):
-                continue
+            # Evaluate Signals
+            is_buy = False
+            is_sell = False
 
-            # Golden Cross
-            if prev_sma50 < prev_sma200 and curr_sma50 > curr_sma200:
+            # SMA Cross
+            if not pd.isna(p_sma50) and not pd.isna(p_sma200) and not pd.isna(c_sma50) and not pd.isna(c_sma200):
+                if p_sma50 < p_sma200 and c_sma50 > c_sma200:
+                    is_buy = True
+                elif p_sma50 > p_sma200 and c_sma50 < c_sma200:
+                    is_sell = True
+
+            # MACD Cross
+            if not pd.isna(p_macd) and not pd.isna(p_macd_sig) and not pd.isna(c_macd) and not pd.isna(c_macd_sig):
+                if p_macd < p_macd_sig and c_macd > c_macd_sig:
+                    is_buy = True
+                elif p_macd > p_macd_sig and c_macd < c_macd_sig:
+                    is_sell = True
+
+            # RSI Cross 30/70
+            if not pd.isna(p_rsi) and not pd.isna(c_rsi):
+                if p_rsi < 30 and c_rsi >= 30: # Crossing up from oversold
+                    is_buy = True
+                elif p_rsi > 70 and c_rsi <= 70: # Crossing down from overbought
+                    is_sell = True
+
+            # StochRSI Cross
+            if not pd.isna(p_stoch_k) and not pd.isna(p_stoch_d) and not pd.isna(c_stoch_k) and not pd.isna(c_stoch_d):
+                if p_stoch_k < p_stoch_d and c_stoch_k > c_stoch_d:
+                     is_buy = True
+                elif p_stoch_k > p_stoch_d and c_stoch_k < c_stoch_d:
+                     is_sell = True
+
+            if is_buy and not is_sell:
                 buy_signals.append(symbol)
-
-            # Death Cross
-            elif prev_sma50 > prev_sma200 and curr_sma50 < curr_sma200:
+            elif is_sell and not is_buy:
                 sell_signals.append(symbol)
 
         # Execute Sells First (to free up cash)
